@@ -1,19 +1,34 @@
-# Create a Python virtual environment
+#!/bin/bash
+# Create a Python virtual environment named venv
 
-To create a virtual environment, run the following command:
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    echo "Virtual environment 'venv' created."
+else
+    echo "Virtual environment 'venv' already exists."
+fi
 
-```bash
-python3 -m venv venv
-```
+# Activate the virtual environment
+# On macOS/Linux
+if [ "$OSTYPE" = "darwin" ] || [ "$OSTYPE" = "linux-gnu" ]; then
+    source venv/bin/activate
+elif [ "$OSTYPE" = "cygwin" ] || [ "$OSTYPE" = "msys" ] || [ "$OSTYPE" = "win32" ]; then
+    # On Windows
+    venv\Scripts\activate
+else
+    echo "Unsupported OS: $OSTYPE"
+    exit 1
+fi
 
-# Activating the virtual environment
+# Upgrade pip, setuptools, and wheel
+pip install --upgrade pip setuptools wheel
 
-### On macOS and Linux:
-```bash
-source venv/bin/activate
-```
+# Install dependencies
+pip install pygame-ce orjson perlin-noise numpy
 
-### On Windows:
-```bash
-venv\Scripts\activate
-```
+# Instructions for usage
+echo "
+To activate the virtual environment after creating it, use the following command:
+ - For macOS/Linux: source venv/bin/activate
+ - For Windows: venv\Scripts\activate
+"
