@@ -2,6 +2,8 @@ BATTLE OF DOTS
 =====
 BATTLE OF DOTS is a LAN RTS war game, a war simulation built in python with pygame. Original credit goes to https://warofdots.net/ and as this is a fork to https://github.com/gamepycoder/War-of-dots.
 Part two of this game is created with Godot Engine: https://github.com/SudoMakeMeASandwichDE/battle-of-dots-2
+# Make sure to check it out!
+
 
 Feel free to start issues.
 Feel free to contribute.
