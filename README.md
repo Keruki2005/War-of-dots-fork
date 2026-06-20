@@ -79,3 +79,5 @@ C: Delete the paths you drew before you send them.
 P: Send pause request.
 
 Terminal: Use the terminal to set the IP/PORT address and restart the client.
+
+Thanks for playing! :)
