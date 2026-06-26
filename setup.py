@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name="battle-of-dots",
-    version="0.1.0",
+    version="0.1.1",
     description="Battle of Dots is a LAN RTS war game, a simple barebones war simulation built in python with pygame. Original credit goes to",
     author="Keruki2005",
     long_description=long_description,
