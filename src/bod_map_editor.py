@@ -75,7 +75,8 @@ class MapEditor:
         self.world_y = data["world_y"]
         self.terrain = np.asarray(data["terrain"], dtype=np.float32)
         self.forest = np.asarray(data["forest"], dtype=np.float32)
-        self.cities = [tuple(c) for c in data["cities"]]
+        self.cities = data.get("cities", {i: [] for i in range(data["players"])})
+        self.units = data.get("units", {i: [] for i in range(data["players"])})
 
         pygame.init()
         info = pygame.display.Info()
@@ -116,8 +117,6 @@ class MapEditor:
         self.city_brush = MapBrush(8.0, 1.0)
         self.terrain_by_zoom: dict[float, pygame.Surface] = {}
         self.selected_player = 0
-        self.cities = data.get("cities", {i: [] for i in range(data["players"])})
-        self.units = data.get("units", {i: [] for i in range(data["players"])})
 
 
     def _zoom_at(self, idx: int) -> float:
@@ -139,7 +138,7 @@ class MapEditor:
         return self.camx + sx / self.zoom, self.camy + sy / self.zoom
 
     def _apply_tool_at(self, wx: float, wy: float) -> None:
-        tool = self.TOOLS[self.tool_idx]
+        tool = TOOLS[self.tool_idx]
         if tool == "city":
             self._toggle_entity(self.cities[self.selected_player], wx, wy)
         elif tool == "unit":
@@ -197,7 +196,7 @@ class MapEditor:
     def _handle_key(self, e: pygame.event.Event) -> None:
         if e.key == pygame.K_ESCAPE:
             self.done = True
-        elif pygame.K_1 <= e.key <= pygame.K_7:
+        elif pygame.K_1 <= e.key <= pygame.K_8:
             self.tool_idx = e.key - pygame.K_1
         elif e.key == pygame.K_s:
             self._save_dialog()
@@ -209,8 +208,6 @@ class MapEditor:
             self.brush.radius = min(200, self.brush.radius + 10)
         elif e.key == pygame.K_p:
             self.selected_player = (self.selected_player + 1) % self.data["players"]
-        elif pygame.K_1 <= e.key <= pygame.K_8: # Added key 8 for units
-            self.tool_idx = e.key - pygame.K_1
 
     def _save_dialog(self) -> None:
         self._sync_data()
@@ -262,10 +259,11 @@ class MapEditor:
                 hill_diff = max(0, tv - (HILL.threshold - 0.1))
                 self.forest[x, y] = value - plains_diff * 10 - hill_diff * 10
 
-        self.cities = []
+        self.cities = {i: [] for i in range(players)}
         tries = 0
         distance = CITY_DISTANCE
-        while len(self.cities) < players * CITIES_PER_PLAYER:
+        total_cities = 0
+        while total_cities < players * CITIES_PER_PLAYER:
             cx = random.randint(0, self.rows)
             cy = random.randint(0, self.cols)
             tv = self.terrain[cx, cy]
@@ -274,13 +272,16 @@ class MapEditor:
                 and all(
                     abs(cx * CELL_SIZE - c[0]) + abs(cy * CELL_SIZE - c[1])
                     >= CELL_SIZE * distance
-                    for c in self.cities
+                    for player_cities in self.cities.values()
+                    for c in player_cities
                 )
                 and 1 <= cx <= self.rows - 1
                 and 1 <= cy <= self.cols - 1
                 and self.forest[cx, cy] < THRESHOLD
             ):
-                self.cities.append((cx * CELL_SIZE, cy * CELL_SIZE))
+                player_id = total_cities % players
+                self.cities[player_id].append((cx * CELL_SIZE, cy * CELL_SIZE))
+                total_cities += 1
                 distance = CITY_DISTANCE
             tries += 1
             if tries >= CITY_PLACE_TRIES:
@@ -328,14 +329,14 @@ class MapEditor:
                 for poly in layer:
                     scaled = [(int(x * z), int(y * z)) for x, y in poly]
                     pygame.draw.polygon(surf, color, scaled, 0)
-        for p_id in range(self.data["players"]):
-            color = self.PLAYER_COLORS[p_id]
-            for (cx, cy) in self.cities[p_id]:
-                pygame.draw.circle(surf, color, (int(cx*z), int(cy*z)), int(CITY_R*z))
-            for (ux, uy) in self.units[p_id]:
-                # Draw square for units
-                rect = (int((ux-5)*z), int((uy-5)*z), int(10*z), int(10*z))
-                pygame.draw.rect(surf, color, rect)
+            for p_id in range(self.data["players"]):
+                color = PLAYER_COLORS[p_id]
+                for (cx, cy) in self.cities[p_id]:
+                    pygame.draw.circle(surf, color, (int(cx*z), int(cy*z)), int(CITY_R*z))
+                for (ux, uy) in self.units[p_id]:
+                    # Draw square for units
+                    rect = (int((ux-5)*z), int((uy-5)*z), int(10*z), int(10*z))
+                    pygame.draw.rect(surf, color, rect)
             self.terrain_by_zoom[z] = surf
         self.dirty = False
 
@@ -347,16 +348,17 @@ class MapEditor:
         ox, oy = int(-self.camx * z), int(-self.camy * z)
         self.screen.blit(self.terrain_by_zoom[z], (ox, oy))
 
-        tool = self.TOOLS[self.tool_idx]
+        tool = TOOLS[self.tool_idx]
+        total_cities = sum(len(cities) for cities in self.cities.values())
         lines = [
-             f"Editing Player {self.selected_player + 1} (Color: {self.PLAYER_COLORS[self.selected_player]})",
+             f"Editing Player {self.selected_player + 1} (Color: {PLAYER_COLORS[self.selected_player]})",
                 "Press 'P' to switch player | 1-8: tools",
             f"Map: {self.data.get('name', 'untitled')} | Players: {self.data['players']}",
             f"Tool [{self.tool_idx + 1}]: {tool} | Brush radius: {int(self.brush.radius)}",
-            f"Cities: {len(self.cities)} / {self.data['players'] * CITIES_PER_PLAYER} needed",
-            "1-7: tools | Drag LMB: paint | RMB: pan | Wheel: zoom",
+            f"Cities: {total_cities} / {self.data['players'] * CITIES_PER_PLAYER} needed",
+            "1-8: tools | Drag LMB: paint | RMB: pan | Wheel: zoom",
             "[ ]: brush size | G: generate island | S: save | Esc: quit",
-            "Tools: 1=water 2=plains 3=hill 4=mountain 5=forest 6=clear forest 7=city",
+            "Tools: 1=water 2=plains 3=hill 4=mountain 5=forest 6=clear forest 7=city 8=unit",
         ]
         y = 8
         for line in lines:
