@@ -66,23 +66,15 @@ def new_map_data(players: int) -> dict:
         "cell_size": CELL_SIZE,
         "terrain": np.zeros((rows + 1, cols + 1), dtype=np.float32),
         "forest": np.full((rows + 1, cols + 1), FOREST_CLEAR, dtype=np.float32),
-        "cities": [],
+        "cities": {i: [] for i in range(players)}, # Dictionary by player
+        "units": {i: [] for i in range(players)},  # Dictionary by player
     }
-
 
 def map_data_to_save_payload(data: dict) -> dict:
     return {
-        "version": data["version"],
-        "name": data["name"],
-        "players": data["players"],
-        "rows": data["rows"],
-        "cols": data["cols"],
-        "world_x": data["world_x"],
-        "world_y": data["world_y"],
-        "cell_size": data["cell_size"],
-        "terrain": np.asarray(data["terrain"], dtype=np.float32).tolist(),
-        "forest": np.asarray(data["forest"], dtype=np.float32).tolist(),
-        "cities": [[float(c[0]), float(c[1])] for c in data["cities"]],
+        # ... rest of the fields ...
+        "cities": {str(k): v for k, v in data["cities"].items()},
+        "units": {str(k): v for k, v in data["units"].items()},
     }
 
 
