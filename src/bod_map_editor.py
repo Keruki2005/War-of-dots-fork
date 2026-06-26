@@ -32,6 +32,8 @@ from src.bod_map_io import (
     save_map,
 )
 
+TOOLS = ["water", "plains", "hill", "mountain", "forest", "erase_forest", "city", "unit"]
+PLAYER_COLORS = [(255, 50, 50), (50, 255, 50), (50, 50, 255), (255, 255, 50), (255, 50, 255), (50, 255, 255)]
 
 class MapBrush:
     def __init__(self, radius: float = 50.0, strength: float = 1.0) -> None:
@@ -65,8 +67,6 @@ class MapBrush:
 
 
 class MapEditor:
-    TOOLS = ["water", "plains", "hill", "mountain", "forest", "erase_forest", "city"]
-
     def __init__(self, data: dict) -> None:
         self.data = data
         self.rows = data["rows"]
@@ -115,6 +115,10 @@ class MapEditor:
         self.brush = MapBrush(55.0, 1.0)
         self.city_brush = MapBrush(8.0, 1.0)
         self.terrain_by_zoom: dict[float, pygame.Surface] = {}
+        self.selected_player = 0
+        self.cities = data.get("cities", {i: [] for i in range(data["players"])})
+        self.units = data.get("units", {i: [] for i in range(data["players"])})
+
 
     def _zoom_at(self, idx: int) -> float:
         return self.zoom_levels[idx] * self.factor
@@ -129,9 +133,7 @@ class MapEditor:
         pygame.quit()
 
     def _sync_data(self) -> None:
-        self.data["terrain"] = self.terrain
-        self.data["forest"] = self.forest
-        self.data["cities"] = self.cities
+        self.data.update({"terrain": self.terrain, "forest": self.forest, "cities": self.cities, "units": self.units})
 
     def _world_from_screen(self, sx: int, sy: int) -> tuple[float, float]:
         return self.camx + sx / self.zoom, self.camy + sy / self.zoom
@@ -139,24 +141,21 @@ class MapEditor:
     def _apply_tool_at(self, wx: float, wy: float) -> None:
         tool = self.TOOLS[self.tool_idx]
         if tool == "city":
-            self._toggle_city(wx, wy)
-            return
-        if tool == "forest":
-            self.brush.apply(self.forest, wx, wy, FOREST_PAINT)
-        elif tool == "erase_forest":
-            self.brush.apply(self.forest, wx, wy, FOREST_CLEAR)
+            self._toggle_entity(self.cities[self.selected_player], wx, wy)
+        elif tool == "unit":
+            self._toggle_entity(self.units[self.selected_player], wx, wy)
         else:
-            self.brush.apply(self.terrain, wx, wy, TERRAIN_PAINT[tool])
-        self.dirty = True
+            self.dirty = True
 
-    def _toggle_city(self, wx: float, wy: float) -> None:
-        for i, (cx, cy) in enumerate(self.cities):
-            if math.hypot(wx - cx, wy - cy) < CITY_R * 2:
-                self.cities.pop(i)
-                self.dirty = True
+
+    def _toggle_entity(self, collection: list, wx: float, wy: float) -> None:
+        # Toggle: delete if near, otherwise add
+        for i, (ex, ey) in enumerate(collection):
+            if math.hypot(wx - ex, wy - ey) < 15: # Tolerance in world units
+                collection.pop(i)
                 return
-        self.cities.append((wx, wy))
-        self.dirty = True
+        collection.append((wx, wy))
+
 
     def _handle_events(self) -> None:
         for e in pygame.event.get():
@@ -208,6 +207,10 @@ class MapEditor:
             self.brush.radius = max(10, self.brush.radius - 10)
         elif e.key == pygame.K_RIGHTBRACKET:
             self.brush.radius = min(200, self.brush.radius + 10)
+        elif e.key == pygame.K_p:
+            self.selected_player = (self.selected_player + 1) % self.data["players"]
+        elif pygame.K_1 <= e.key <= pygame.K_8: # Added key 8 for units
+            self.tool_idx = e.key - pygame.K_1
 
     def _save_dialog(self) -> None:
         self._sync_data()
@@ -325,10 +328,14 @@ class MapEditor:
                 for poly in layer:
                     scaled = [(int(x * z), int(y * z)) for x, y in poly]
                     pygame.draw.polygon(surf, color, scaled, 0)
-            for cx, cy in self.cities:
-                pygame.draw.circle(
-                    surf, CITY_COLOR, (int(cx * z), int(cy * z)), max(1, int(CITY_R * z))
-                )
+        for p_id in range(self.data["players"]):
+            color = self.PLAYER_COLORS[p_id]
+            for (cx, cy) in self.cities[p_id]:
+                pygame.draw.circle(surf, color, (int(cx*z), int(cy*z)), int(CITY_R*z))
+            for (ux, uy) in self.units[p_id]:
+                # Draw square for units
+                rect = (int((ux-5)*z), int((uy-5)*z), int(10*z), int(10*z))
+                pygame.draw.rect(surf, color, rect)
             self.terrain_by_zoom[z] = surf
         self.dirty = False
 
@@ -342,6 +349,8 @@ class MapEditor:
 
         tool = self.TOOLS[self.tool_idx]
         lines = [
+             f"Editing Player {self.selected_player + 1} (Color: {self.PLAYER_COLORS[self.selected_player]})",
+                "Press 'P' to switch player | 1-8: tools",
             f"Map: {self.data.get('name', 'untitled')} | Players: {self.data['players']}",
             f"Tool [{self.tool_idx + 1}]: {tool} | Brush radius: {int(self.brush.radius)}",
             f"Cities: {len(self.cities)} / {self.data['players'] * CITIES_PER_PLAYER} needed",
